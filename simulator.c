@@ -5,6 +5,7 @@
 #include <unistd.h> 
 #include <stdio.h> 
 #include <string.h>
+#include "queue.h"
 
 #define MAX_LINE_LENGTH 20
 #define MAIN_FONT "/usr/share/fonts/TTF/DejaVuSans.ttf"
@@ -16,20 +17,8 @@
 #define ARROW_SIZE 15
 #define QUEUE_SIZE 10
 
-typedef struct {
-    char* vehicles[QUEUE_SIZE];
-    int front;
-    int rear;
-    SDL_mutex* mutex;
-    SDL_cond* cond
-}VehicleQueue;
+const char* VEHICLE_FILE = "vehicles.data";
 
-void initializeQueue(VehicleQueue* queue){
-    queue->front=0;
-    queue->rear=0;
-    queue->mutex=SDL_CreateMutex();
-    queue->cond=SDL_CreateCond();
-}
 
 
 
@@ -59,7 +48,12 @@ int main() {
     pthread_t tQueue, tReadFile;
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;    
-    SDL_Event event;    
+    SDL_Event event;
+    
+    VehicleQueue* queue;
+    initializeQueue(&queue);
+
+
 
     if (!initializeSDL(&window, &renderer)) {
         return -1;
@@ -80,7 +74,7 @@ int main() {
     // we need to create seprate long running thread for the queue processing and light
    // pthread_create(&tLight, NULL, refreshLight, &sharedData);
     pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
-    pthread_create(&tReadFile, NULL, readAndParseFile, NULL);
+    pthread_create(&tReadFile, NULL, readAndParseFile, (void*) &queue);
     readAndParseFile();
 
     // Continue the UI thread
@@ -277,6 +271,7 @@ void* chequeQueue(void* arg){
 
 // you may need to pass the queue on this function for sharing the data
 void* readAndParseFile(void* arg) {
+    VehicleQueue* queue = (VehicleQueue*) arg;
     while(1){ 
         FILE* file = fopen(VEHICLE_FILE, "r");
         if (!file) {
@@ -293,8 +288,12 @@ void* readAndParseFile(void* arg) {
             char* vehicleNumber = strtok(line, ":");
             char* road = strtok(NULL, ":"); // read next item resulted from split
 
-            if (vehicleNumber && road)  printf("Vehicle: %s, Road: %s\n", vehicleNumber, road);
-            else printf("Invalid format: %s\n", line);
+            if (vehicleNumber && road)  {
+            printf("Vehicle: %s, Road: %s\n", vehicleNumber, road);
+            enqueue(queue, vehicleNumber);
+            }
+           else printf("Invalid format: %s\n", line);
+
         }
         fclose(file);
         sleep(2); // manage this time
