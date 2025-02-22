@@ -5,7 +5,6 @@
 #include <unistd.h> 
 #include <stdio.h> 
 #include <string.h>
-#include "queue.h"
 
 #define MAX_LINE_LENGTH 20
 #define MAIN_FONT "/usr/share/fonts/TTF/DejaVuSans.ttf"
@@ -16,21 +15,50 @@
 #define LANE_WIDTH 50
 #define ARROW_SIZE 15
 #define QUEUE_SIZE 10
+#define MAX_VEHICLE_QUEUE_SIZE 15
+#define MAX_ROADS 4
+#define MAX_LANE_SIZE 3
 
 const char* VEHICLE_FILE = "vehicles.data";
 
 
 
 
-const char* VEHICLE_FILE = "vehicles.data";
+
+typedef struct{
+    char VechicleName[7];
+    char road[20];
+
+}Vehicle;
+
+typedef struct {
+    Vehicle vehicles[MAX_VEHICLE_QUEUE_SIZE];
+    int front;
+    int rear;
+    int count;
+    SDL_mutex* mutex; 
+    SDL_cond* cond;
+
+}VehicleQueue;
+
+typedef struct {
+
+    bool isPriority;
+    int VehiclesNo;
+    VehicleQueue queue;
+} Lane;
+
+typedef struct {
+    char roadName[20];
+    Lane lanes[MAX_LANE_SIZE];
+}Road;
 
 typedef struct{
     int currentLight;
     int nextLight;
 } SharedData;
 
-
-// Function declarations
+void initializeRoads(Road roads[MAX_ROADS]);
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
@@ -38,6 +66,135 @@ void drawLightForB(SDL_Renderer* renderer, bool isRed);
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
 void* chequeQueue(void* arg);
 void* readAndParseFile(void* arg);
+void initializeQueue(VehicleQueue* queue);
+bool enqueue(VehicleQueue* queue, Vehicle vehicle) ;
+Vehicle dequeue(VehicleQueue* queue);
+Road* findRoad(Road roads[MAX_ROADS], const char* roadName);
+Road* findRoad(Road roads[MAX_ROADS], const char* roadName);
+
+
+
+
+void initializeQueue(VehicleQueue* queue){
+    queue->front=0;
+    queue->rear=0;
+    queue->count=0;
+    queue->mutex=SDL_CreateMutex();
+    queue->cond=SDL_CreateCond();
+}
+bool enqueue(VehicleQueue* queue, Vehicle vehicle) {
+
+    SDL_LockMutex(queue->mutex);
+
+    if (queue->count < QUEUE_SIZE) {
+
+        queue->vehicles[queue->rear] = vehicle; // Add vehicle to the queue
+
+        queue->rear = (queue->rear + 1) % QUEUE_SIZE; // Move rear index forward
+
+        queue->count++; // Increment vehicle count
+
+        SDL_CondSignal(queue->cond); // Signal that a vehicle has been added
+
+        SDL_UnlockMutex(queue->mutex);
+
+        return true; // Successfully added
+
+    }
+
+    SDL_UnlockMutex(queue->mutex);
+
+    return false; // Queue is full
+
+}
+
+// Function to remove a vehicle from the queue
+
+Vehicle dequeue(VehicleQueue* queue) {
+
+    SDL_LockMutex(queue->mutex);
+
+    while (queue->count == 0) {
+
+        SDL_CondWait(queue->cond, queue->mutex);
+
+    }
+
+    Vehicle vehicle = queue->vehicles[queue->front]; // Get the vehicle from the front
+
+    queue->front = (queue->front + 1) % QUEUE_SIZE; // Move front index forward
+
+    queue->count--; // Decrement vehicle count
+}
+
+void initializeRoads(Road roads[MAX_ROADS]){
+    const char* roadNames[MAX_ROADS] ={"Road A","Road B","Road C","Road D"};
+    
+    for (int i=0;i<MAX_ROADS;i++){
+        strcpy(roads[i].roadName, roadNames[i]);
+        for(int j=0;j<MAX_LANE_SIZE;j++){
+              initializeQueue(&(roads[i].lanes[j].queue));
+              roads[i].lanes[j].isPriority=false;
+        }
+    }
+}
+
+Road* findRoad(Road roads[MAX_ROADS], const char* roadName)
+{
+    for (int i=0;i< MAX_ROADS;i++){
+        if(strcmp(roads[i].roadName, roadName)==0){
+           return &roads[i];
+        }
+    }
+    return NULL;
+}
+
+void addVehicleToRandomLane(Road roads[MAX_ROADS],const char* roadName, Vehicle vehicle){
+    Road* road=findRoad(roads,roadName);
+    if (road!=NULL){
+        int laneIndex=rand()%MAX_LANE_SIZE;
+        if(enqueue(&road->lanes[laneIndex].queue,vehicle))
+        {
+         printf("Vehicle %s added to %s, Lane %d\n", vehicle.VechicleName, roadName, laneIndex + 1);   
+        }
+        else {
+
+            printf("Lane %d of %s is full. Vehicle %s could not be added.\n", laneIndex + 1, roadName, vehicle.VechicleName);
+    }
+    }
+    else {
+
+        printf("Road %s not found.\n", roadName);
+    }
+}
+
+void printRoads(Road roads[MAX_ROADS]) {
+
+    for (int i = 0; i < MAX_ROADS; i++) {
+
+        printf("%s:\n", roads[i].roadName);
+
+        for (int j = 0; j < MAX_LANE_SIZE; j++) {
+
+            Lane* lane = &roads[i].lanes[j];
+
+            printf("  Lane %d - Vehicles in Queue: %d, Priority: %s\n", 
+
+                   j + 1, lane->queue.count, lane->isPriority ? "Yes" : "No");
+
+        }
+
+    }
+
+}
+
+
+
+
+
+
+// Function declarations
+
 
 
 void printMessageHelper(const char* message, int count) {
@@ -50,8 +207,9 @@ int main() {
     SDL_Renderer* renderer = NULL;    
     SDL_Event event;
     
-    VehicleQueue* queue;
-    initializeQueue(&queue);
+    Road roads[MAX_ROADS]; // Declare the roads array
+
+    initializeRoads(roads);;
 
 
 
@@ -74,8 +232,8 @@ int main() {
     // we need to create seprate long running thread for the queue processing and light
    // pthread_create(&tLight, NULL, refreshLight, &sharedData);
     pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
-    pthread_create(&tReadFile, NULL, readAndParseFile, (void*) &queue);
-    readAndParseFile();
+    pthread_create(&tReadFile, NULL, readAndParseFile, (void*) roads);
+
 
     // Continue the UI thread
     bool running = true;
@@ -174,7 +332,8 @@ void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, i
     SDL_RenderFillRect(renderer, &lightBox);
     // draw light
     if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // red
-    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    // green
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 
+    50, 255);    // green
     SDL_Rect straight_Light = {405, 305, 20, 20};
     SDL_RenderFillRect(renderer, &straight_Light);
     drawArrow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
@@ -271,7 +430,7 @@ void* chequeQueue(void* arg){
 
 // you may need to pass the queue on this function for sharing the data
 void* readAndParseFile(void* arg) {
-    VehicleQueue* queue = (VehicleQueue*) arg;
+Road* roads = (Road*)arg;
     while(1){ 
         FILE* file = fopen(VEHICLE_FILE, "r");
         if (!file) {
@@ -288,14 +447,27 @@ void* readAndParseFile(void* arg) {
             char* vehicleNumber = strtok(line, ":");
             char* road = strtok(NULL, ":"); // read next item resulted from split
 
-            if (vehicleNumber && road)  {
-            printf("Vehicle: %s, Road: %s\n", vehicleNumber, road);
-            enqueue(queue, vehicleNumber);
-            }
-           else printf("Invalid format: %s\n", line);
+    if (vehicleNumber && road) {
 
-        }
+        Vehicle vehicle;
+
+        strncpy(vehicle.VechicleName, vehicleNumber, sizeof(vehicle.VechicleName));
+
+        strncpy(vehicle.road, road, sizeof(vehicle.road)); // Assuming 'road' is the road name
+
+        
+
+        printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, road);
+
+        addVehicleToRandomLane(roads, road, vehicle); // Pass the Vehicle struct
+
+    } else {
+
+        printf("Invalid format: %s\n", line);
+
+    }
         fclose(file);
         sleep(2); // manage this time
     }
+}
 }
