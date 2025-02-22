@@ -14,6 +14,23 @@
 #define ROAD_WIDTH 150
 #define LANE_WIDTH 50
 #define ARROW_SIZE 15
+#define QUEUE_SIZE 10
+
+typedef struct {
+    char* vehicles[QUEUE_SIZE];
+    int front;
+    int rear;
+    SDL_mutex* mutex;
+    SDL_cond* cond
+}VehicleQueue;
+
+void initializeQueue(VehicleQueue* queue){
+    queue->front=0;
+    queue->rear=0;
+    queue->mutex=SDL_CreateMutex();
+    queue->cond=SDL_CreateCond();
+}
+
 
 
 const char* VEHICLE_FILE = "vehicles.data";
@@ -56,14 +73,15 @@ int main() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
     drawRoadsAndLane(renderer, font);
-    // drawLightForB(renderer, false);
+    drawLightForB(renderer, false);
+ 
     SDL_RenderPresent(renderer);
 
     // we need to create seprate long running thread for the queue processing and light
-    // pthread_create(&tLight, NULL, refreshLight, &sharedData);
+   // pthread_create(&tLight, NULL, refreshLight, &sharedData);
     pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
     pthread_create(&tReadFile, NULL, readAndParseFile, NULL);
-    // readAndParseFile();
+    readAndParseFile();
 
     // Continue the UI thread
     bool running = true;
@@ -126,7 +144,7 @@ void swap(int *a, int *b) {
 }
 
 
-void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3) {
+void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3) {
     // Sort vertices by ascending Y (bubble sort approach)
     if (y1 > y2) { swap(&y1, &y2); swap(&x1, &x2); }
     if (y1 > y3) { swap(&y1, &y3); swap(&x1, &x3); }
@@ -155,11 +173,9 @@ void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, 
         sx2 += dx2;
     }
 }
-
-
-void drawLightForB(SDL_Renderer* renderer, bool isRed){
+ void drawLightForB(SDL_Renderer* renderer, bool isRed){
     // draw light box
-    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_SetRenderDrawColor(renderer, 150, 75,0, 255);
     SDL_Rect lightBox = {400, 300, 50, 30};
     SDL_RenderFillRect(renderer, &lightBox);
     // draw light
@@ -167,8 +183,13 @@ void drawLightForB(SDL_Renderer* renderer, bool isRed){
     else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    // green
     SDL_Rect straight_Light = {405, 305, 20, 20};
     SDL_RenderFillRect(renderer, &straight_Light);
-    drawArrwow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
+    drawArrow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
 }
+
+
+
+
+
 
 
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
@@ -220,8 +241,8 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int 
     SDL_Rect textRect = {x,y,0,0 };
     SDL_QueryTexture(texture, NULL, NULL, &textRect.w, &textRect.h);
     SDL_Log("DIM of SDL_Rect %d %d %d %d", textRect.x, textRect.y, textRect.h, textRect.w);
-    // SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    // SDL_Log("TTF_Error: %s\n", TTF_GetError());
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_Log("TTF_Error: %s\n", TTF_GetError());
     SDL_RenderCopy(renderer, texture, NULL, &textRect);
     // SDL_Log("TTF_Error: %s\n", TTF_GetError());
 }
@@ -272,7 +293,7 @@ void* readAndParseFile(void* arg) {
             char* vehicleNumber = strtok(line, ":");
             char* road = strtok(NULL, ":"); // read next item resulted from split
 
-            if (vehicleNumber && road)  printf("Vehicle: %s, Raod: %s\n", vehicleNumber, road);
+            if (vehicleNumber && road)  printf("Vehicle: %s, Road: %s\n", vehicleNumber, road);
             else printf("Invalid format: %s\n", line);
         }
         fclose(file);
