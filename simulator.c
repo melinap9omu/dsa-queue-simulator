@@ -2,12 +2,12 @@
 #include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <unistd.h> 
-#include <stdio.h> 
+#include <unistd.h>
+#include <stdio.h>
 #include <string.h>
 
 #define MAX_LINE_LENGTH 20
-#define MAIN_FONT "/usr/share/fonts/TTF/DejaVuSans.ttf"
+#define MAIN_FONT "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 #define SCALE 1
@@ -36,7 +36,7 @@ typedef struct {
     int front;
     int rear;
     int count;
-    SDL_mutex* mutex; 
+    SDL_mutex* mutex;
     SDL_cond* cond;
 
 }VehicleQueue;
@@ -60,7 +60,7 @@ typedef struct{
 
 void initializeRoads(Road roads[MAX_ROADS]);
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
-void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font);
+void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road roads[MAX_ROADS]);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
 void drawLightForB(SDL_Renderer* renderer, bool isRed);
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
@@ -129,9 +129,10 @@ Vehicle dequeue(VehicleQueue* queue) {
 
 void initializeRoads(Road roads[MAX_ROADS]){
     const char* roadNames[MAX_ROADS] ={"Road A","Road B","Road C","Road D"};
-    
+
     for (int i=0;i<MAX_ROADS;i++){
         strcpy(roads[i].roadName, roadNames[i]);
+        printf("%s\n",roads[i].roadName);
         for(int j=0;j<MAX_LANE_SIZE;j++){
               initializeQueue(&(roads[i].lanes[j].queue));
               roads[i].lanes[j].isPriority=false;
@@ -139,15 +140,15 @@ void initializeRoads(Road roads[MAX_ROADS]){
     }
 }
 
-Road* findRoad(Road roads[MAX_ROADS], const char* roadName)
-{
-    for (int i=0;i< MAX_ROADS;i++){
-        if(strcmp(roads[i].roadName, roadName)==0){
-           return &roads[i];
-        }
-    }
-    return NULL;
-}
+ Road* findRoad(Road roads[MAX_ROADS], const char* roadName)
+ {
+     for (int i=0;i< MAX_ROADS;i++){
+         if(strcmp(roads[i].roadName, roadName)==0){
+            return &roads[i];
+         }
+     }
+     return NULL;
+ }
 
 void addVehicleToRandomLane(Road roads[MAX_ROADS],const char* roadName, Vehicle vehicle){
     Road* road=findRoad(roads,roadName);
@@ -155,7 +156,7 @@ void addVehicleToRandomLane(Road roads[MAX_ROADS],const char* roadName, Vehicle 
         int laneIndex=rand()%MAX_LANE_SIZE;
         if(enqueue(&road->lanes[laneIndex].queue,vehicle))
         {
-         printf("Vehicle %s added to %s, Lane %d\n", vehicle.VechicleName, roadName, laneIndex + 1);   
+         printf("Vehicle %s added to %s, Lane %d\n", vehicle.VechicleName, roadName, laneIndex + 1);
         }
         else {
 
@@ -178,7 +179,7 @@ void printRoads(Road roads[MAX_ROADS]) {
 
             Lane* lane = &roads[i].lanes[j];
 
-            printf("  Lane %d - Vehicles in Queue: %d, Priority: %s\n", 
+            printf("  Lane %d - Vehicles in Queue: %d, Priority: %s\n",
 
                    j + 1, lane->queue.count, lane->isPriority ? "Yes" : "No");
 
@@ -204,9 +205,9 @@ void printMessageHelper(const char* message, int count) {
 int main() {
     pthread_t tQueue, tReadFile;
     SDL_Window* window = NULL;
-    SDL_Renderer* renderer = NULL;    
+    SDL_Renderer* renderer = NULL;
     SDL_Event event;
-    
+
     Road roads[MAX_ROADS]; // Declare the roads array
 
     initializeRoads(roads);;
@@ -218,15 +219,15 @@ int main() {
     }
     SDL_mutex* mutex = SDL_CreateMutex();
     SharedData sharedData = { 0, 0 }; // 0 => all red
-    
+
     TTF_Font* font = TTF_OpenFont(MAIN_FONT, 24);
     if (!font) SDL_Log("Failed to load font: %s", TTF_GetError());
 
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
-    drawRoadsAndLane(renderer, font);
+    drawRoadsAndLane(renderer, font,roads);
     drawLightForB(renderer, false);
- 
+
     SDL_RenderPresent(renderer);
 
     // we need to create seprate long running thread for the queue processing and light
@@ -332,7 +333,7 @@ void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, i
     SDL_RenderFillRect(renderer, &lightBox);
     // draw light
     if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // red
-    else SDL_SetRenderDrawColor(renderer, 11, 156, 
+    else SDL_SetRenderDrawColor(renderer, 11, 156,
     50, 255);    // green
     SDL_Rect straight_Light = {405, 305, 20, 20};
     SDL_RenderFillRect(renderer, &straight_Light);
@@ -344,11 +345,10 @@ void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, i
 
 
 
-
-void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
+void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road roads[MAX_ROADS]) {
     SDL_SetRenderDrawColor(renderer, 211,211,211,255);
     // Vertical road
-    
+
     SDL_Rect verticalRoad = {WINDOW_WIDTH / 2 - ROAD_WIDTH / 2, 0, ROAD_WIDTH, WINDOW_HEIGHT};
     SDL_RenderFillRect(renderer, &verticalRoad);
 
@@ -359,11 +359,11 @@ void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     for(int i=0; i<=3; i++){
         // Horizontal lanes
-        SDL_RenderDrawLine(renderer, 
+        SDL_RenderDrawLine(renderer,
             0, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,  // x1,y1
             WINDOW_WIDTH/2 - ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i // x2, y2
         );
-        SDL_RenderDrawLine(renderer, 
+        SDL_RenderDrawLine(renderer,
             800, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
             WINDOW_WIDTH/2 + ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i
         );
@@ -377,11 +377,14 @@ void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
             WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, WINDOW_HEIGHT/2 + ROAD_WIDTH/2
         );
     }
-    displayText(renderer, font, "A",400, 10);
-    displayText(renderer, font, "B",400,770);
-    displayText(renderer, font, "D",10,400);
-    displayText(renderer, font, "C",770,400);
-    
+  
+        for (int i = 0; i < MAX_ROADS/2; i++) {
+         displayText(renderer, font, roads[i].roadName, (WINDOW_WIDTH/2)-36,  (WINDOW_HEIGHT*i)-(30*i)); 
+        }
+      for (int i = 0; i < MAX_ROADS/2; i++) {
+         displayText(renderer, font, roads[2+i].roadName, (WINDOW_WIDTH*(1-i)-(96*(1-i))),  (WINDOW_HEIGHT/2) - 16); 
+       }
+
 }
 
 
@@ -389,7 +392,19 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int 
     // display necessary text
     SDL_Color textColor = {0, 0, 0, 255}; // black color
     SDL_Surface *textSurface = TTF_RenderText_Solid(font, text, textColor);
+    if(!textSurface){
+        SDL_Log("failed to create text surface: %s", TTF_GetError());
+    }
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, textSurface);
+     if (!texture) {
+
+        SDL_Log("Failed to create texture: %s", SDL_GetError());
+
+        SDL_FreeSurface(textSurface);
+
+        return; // Handle the error appropriately
+
+    }
     SDL_FreeSurface(textSurface);
     SDL_Rect textRect = {x,y,0,0 };
     SDL_QueryTexture(texture, NULL, NULL, &textRect.w, &textRect.h);
@@ -431,7 +446,7 @@ void* chequeQueue(void* arg){
 // you may need to pass the queue on this function for sharing the data
 void* readAndParseFile(void* arg) {
 Road* roads = (Road*)arg;
-    while(1){ 
+    while(1){
         FILE* file = fopen(VEHICLE_FILE, "r");
         if (!file) {
             perror("Error opening file");
@@ -442,12 +457,38 @@ Road* roads = (Road*)arg;
         while (fgets(line, sizeof(line), file)) {
             // Remove newline if present
             line[strcspn(line, "\n")] = 0;
-
+             char roadName[7];
             // Split using ':'
             char* vehicleNumber = strtok(line, ":");
             char* road = strtok(NULL, ":"); // read next item resulted from split
 
-    if (vehicleNumber && road) {
+      if (vehicleNumber && road) {
+
+                // Determine the road name based on the input
+
+                if (strcmp(road, "A") == 0) {
+
+                    strcpy(roadName, "Road A");
+
+                } else if (strcmp(road, "B") == 0) {
+
+                    strcpy(roadName, "Road B");
+
+                } else if (strcmp(road, "C") == 0) {
+
+                    strcpy(roadName, "Road C");
+
+                } else if (strcmp(road, "D") == 0) {
+
+                    strcpy(roadName, "Road D");
+
+                } else {
+
+                    printf("Invalid road: %s\n", road);
+
+                    continue; // Skip to the next line if the road is invalid
+
+                }
 
         Vehicle vehicle;
 
@@ -455,11 +496,12 @@ Road* roads = (Road*)arg;
 
         strncpy(vehicle.road, road, sizeof(vehicle.road)); // Assuming 'road' is the road name
 
-        
+
 
         printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, road);
 
-        addVehicleToRandomLane(roads, road, vehicle); // Pass the Vehicle struct
+        addVehicleToRandomLane(roads, roadName, vehicle); 
+        
 
     } else {
 
