@@ -15,6 +15,7 @@
 
 typedef struct{
     char VechicleName;
+    char road;
     char source[5];
     char destination1[5];
     char destination2[5];
