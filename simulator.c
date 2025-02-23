@@ -58,11 +58,20 @@ typedef struct{
     int nextLight;
 } SharedData;
 
+typedef struct{
+    SharedData sharedData;
+    int greenDuration;
+    int redDuration;
+}TrafficLight;
+
 void initializeRoads(Road roads[MAX_ROADS]);
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road roads[MAX_ROADS]);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
+void drawLightForA(SDL_Renderer* renderer, bool isRed);
 void drawLightForB(SDL_Renderer* renderer, bool isRed);
+void drawLightForC(SDL_Renderer* renderer, bool isRed);
+void drawLightForD(SDL_Renderer* renderer, bool isRed);
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
 void* chequeQueue(void* arg);
 void* readAndParseFile(void* arg);
@@ -203,7 +212,7 @@ void printMessageHelper(const char* message, int count) {
 }
 
 int main() {
-    pthread_t tQueue, tReadFile;
+    pthread_t tQueue, tReadFile,tLight;
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_Event event;
@@ -226,12 +235,16 @@ int main() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
     drawRoadsAndLane(renderer, font,roads);
-    drawLightForB(renderer, false);
+    drawLightForA(renderer, sharedData.currentLight != 0);
+    drawLightForB(renderer, sharedData.currentLight != 1);
+    drawLightForC(renderer, sharedData.currentLight != 2);
+    drawLightForD(renderer, sharedData.currentLight != 3);
+
 
     SDL_RenderPresent(renderer);
 
     // we need to create seprate long running thread for the queue processing and light
-   // pthread_create(&tLight, NULL, refreshLight, &sharedData);
+    // pthread_create(&tLight, NULL, refreshLight, &sharedData);
     pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
     pthread_create(&tReadFile, NULL, readAndParseFile, (void*) roads);
 
@@ -326,22 +339,89 @@ void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, i
         sx2 += dx2;
     }
 }
- void drawLightForB(SDL_Renderer* renderer, bool isRed){
+
+ void drawLightForA(SDL_Renderer* renderer, bool isRed){
     // draw light box
-    SDL_SetRenderDrawColor(renderer, 150, 75,0, 255);
-    SDL_Rect lightBox = {400, 300, 50, 30};
+       SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {375, 450, 50, 30};  
     SDL_RenderFillRect(renderer, &lightBox);
-    // draw light
-    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // red
-    else SDL_SetRenderDrawColor(renderer, 11, 156,
-    50, 255);    // green
-    SDL_Rect straight_Light = {405, 305, 20, 20};
+
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); 
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    
+    SDL_Rect straight_Light = {400, 455, 20, 20};
     SDL_RenderFillRect(renderer, &straight_Light);
-    drawArrow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
+
+    drawArrow(renderer, 380+10, 455, 380+10, 455+20, 380, 455+10);
+}
+void drawLightForB(SDL_Renderer* renderer, bool isRed){
+    // draw light box
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {375, 300, 50, 30};
+    SDL_RenderFillRect(renderer, &lightBox);
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); 
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    
+    SDL_Rect straight_Light = {380, 305, 20, 20};
+    SDL_RenderFillRect(renderer, &straight_Light);
+    drawArrow(renderer, 410,305, 410, 305+20, 410+10, 305+10);
+}
+
+void drawLightForC(SDL_Renderer* renderer, bool isRed){
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {320, 375, 30, 50};  // Adjust position for road D
+    SDL_RenderFillRect(renderer, &lightBox);
+
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); 
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    
+    SDL_Rect straight_Light = {325, 400, 20, 20};
+    SDL_RenderFillRect(renderer, &straight_Light);
+
+    drawArrow(renderer, 325, 380+10, 325+20, 380+10, 325+10, 380);
+}
+void drawLightForD(SDL_Renderer* renderer, bool isRed){
+      SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {450, 375, 30, 50};  // Adjust position for road C
+    SDL_RenderFillRect(renderer, &lightBox);
+
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); 
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);    
+    SDL_Rect straight_Light = {455, 380, 20, 20};
+    SDL_RenderFillRect(renderer, &straight_Light);
+
+    drawArrow(renderer, 455, 405, 455+20, 405, 455+10, 405+10); // Adjust arrow direction for road C
 }
 
 
 
+void refreshLight(SDL_Renderer *renderer, SharedData* sharedData){
+    if(sharedData->nextLight == sharedData->currentLight) return;
+
+    // Set all lights to red first
+    drawLightForA(renderer, true);  // A road light red
+    drawLightForB(renderer, true);  // B road light red
+    drawLightForC(renderer, true);  // C road light red
+    drawLightForD(renderer, true);  // D road light red
+
+    // Now set the appropriate light to green based on nextLight
+    if(sharedData->nextLight == 0) {
+        drawLightForA(renderer, false);  // A road light green
+    }
+    else if(sharedData->nextLight == 1) {
+        drawLightForB(renderer, false);  // B road light green
+    }
+    else if(sharedData->nextLight == 2) {
+        drawLightForC(renderer, false);  // C road light green
+    }
+    else if(sharedData->nextLight == 3) {
+        drawLightForD(renderer, false);  // D road light green
+    }
+
+    // Present the updated renderer
+    SDL_RenderPresent(renderer);
+
+    printf("Light of queue updated from %d to %d\n", sharedData->currentLight,  sharedData->nextLight);
+    sharedData->currentLight = sharedData->nextLight;
+    fflush(stdout);
+}
 
 
 
@@ -416,20 +496,7 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int 
 }
 
 
-void refreshLight(SDL_Renderer *renderer, SharedData* sharedData){
-    if(sharedData->nextLight == sharedData->currentLight) return; // early return
 
-    if(sharedData->nextLight == 0){ // trun off all lights
-        drawLightForB(renderer, false);
-    }
-    if(sharedData->nextLight == 2) drawLightForB(renderer, true);
-    else drawLightForB(renderer, false);
-    SDL_RenderPresent(renderer);
-    printf("Light of queue updated from %d to %d\n", sharedData->currentLight,  sharedData->nextLight);
-    // update the light
-    sharedData->currentLight = sharedData->nextLight;
-    fflush(stdout);
-}
 
 
 void* chequeQueue(void* arg){
@@ -443,73 +510,75 @@ void* chequeQueue(void* arg){
     }
 }
 
-// you may need to pass the queue on this function for sharing the data
 void* readAndParseFile(void* arg) {
-Road* roads = (Road*)arg;
-    while(1){
+    Road* roads = (Road*)arg;
+
+    while (1) {
         FILE* file = fopen(VEHICLE_FILE, "r");
         if (!file) {
             perror("Error opening file");
+            sleep(2);
             continue;
         }
 
         char line[MAX_LINE_LENGTH];
+        char tempBuffer[MAX_LINE_LENGTH * 100]; // Store remaining lines
+        tempBuffer[0] = '\0'; // Initialize buffer
+        int firstLineProcessed = 0;
+
+        // Read the file line by line
         while (fgets(line, sizeof(line), file)) {
             // Remove newline if present
             line[strcspn(line, "\n")] = 0;
-             char roadName[7];
-            // Split using ':'
-            char* vehicleNumber = strtok(line, ":");
-            char* road = strtok(NULL, ":"); // read next item resulted from split
 
-      if (vehicleNumber && road) {
+            // Skip the first line after processing
+            if (!firstLineProcessed) {
+                firstLineProcessed = 1;
 
-                // Determine the road name based on the input
+                char roadName[7];
+                char* vehicleNumber = strtok(line, ":");
+                char* road = strtok(NULL, ":");
 
-                if (strcmp(road, "A") == 0) {
+                if (vehicleNumber && road) {
+                    if (strcmp(road, "A") == 0) {
+                        strcpy(roadName, "Road A");
+                    } else if (strcmp(road, "B") == 0) {
+                        strcpy(roadName, "Road B");
+                    } else if (strcmp(road, "C") == 0) {
+                        strcpy(roadName, "Road C");
+                    } else if (strcmp(road, "D") == 0) {
+                        strcpy(roadName, "Road D");
+                    } else {
+                        printf("Invalid road: %s\n", road);
+                        continue;
+                    }
 
-                    strcpy(roadName, "Road A");
+                    Vehicle vehicle;
+                    strncpy(vehicle.VechicleName, vehicleNumber, sizeof(vehicle.VechicleName));
+                    strncpy(vehicle.road, road, sizeof(vehicle.road));
 
-                } else if (strcmp(road, "B") == 0) {
-
-                    strcpy(roadName, "Road B");
-
-                } else if (strcmp(road, "C") == 0) {
-
-                    strcpy(roadName, "Road C");
-
-                } else if (strcmp(road, "D") == 0) {
-
-                    strcpy(roadName, "Road D");
-
+                    printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, road);
+                    addVehicleToRandomLane(roads, roadName, vehicle);
                 } else {
-
-                    printf("Invalid road: %s\n", road);
-
-                    continue; // Skip to the next line if the road is invalid
-
+                    printf("Invalid format: %s\n", line);
                 }
-
-        Vehicle vehicle;
-
-        strncpy(vehicle.VechicleName, vehicleNumber, sizeof(vehicle.VechicleName));
-
-        strncpy(vehicle.road, road, sizeof(vehicle.road)); // Assuming 'road' is the road name
-
-
-
-        printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, road);
-
-        addVehicleToRandomLane(roads, roadName, vehicle); 
-        
-
-    } else {
-
-        printf("Invalid format: %s\n", line);
-
-    }
+            } else {
+                // Store remaining lines in the buffer
+                strcat(tempBuffer, line);
+                strcat(tempBuffer, "\n");
+            }
+        }
         fclose(file);
-        sleep(2); // manage this time
+
+        // Overwrite the file with remaining lines
+        FILE* outFile = fopen(VEHICLE_FILE, "w");
+        if (!outFile) {
+            perror("Error writing file");
+        } else {
+            fputs(tempBuffer, outFile);
+            fclose(outFile);
+        }
+
+        sleep(2); // Manage timing
     }
-}
 }
