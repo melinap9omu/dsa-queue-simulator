@@ -82,10 +82,10 @@ int main() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
     drawRoadsAndLane(renderer, font,roads);
-    // drawLightForA(renderer, sharedData.currentLight != 0);
-    // drawLightForB(renderer, sharedData.currentLight != 1);
-    // drawLightForC(renderer, sharedData.currentLight != 2);
-    // drawLightForD(renderer, sharedData.currentLight != 3);
+    drawLightForA(renderer, sharedData.currentLight != 0);
+    drawLightForB(renderer, sharedData.currentLight != 1);
+    drawLightForC(renderer, sharedData.currentLight != 2);
+    drawLightForD(renderer, sharedData.currentLight != 3);
 
 
     SDL_RenderPresent(renderer);
@@ -421,7 +421,7 @@ void* readAndParseFile(void* arg) {
                     strncpy(vehicle.VechicleName, vehicleNumber, sizeof(vehicle.VechicleName));
                     vehicle.road=roadPassed;
                     printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, roadPassed->roadName);
-                    addVehicleToRandomLane(roadPassed, vehicle);
+                   Lane* lane = addVehicleToRandomLane(roadPassed, vehicle);
 
      
                     }

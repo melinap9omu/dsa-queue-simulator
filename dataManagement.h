@@ -23,9 +23,9 @@ typedef struct {
 
     char VechicleName[7];
 
-    Road* road; // Store the road name as a string
-
-    char carDestination[7];
+    Road* road; 
+    
+    Lane* destinationLane[2];
 
 } Vehicle;
 
@@ -80,7 +80,8 @@ Road* findRoad(Road roads[MAX_ROADS], const char* roadName);
 void initializeQueue(VehicleQueue* queue);
 bool enqueue(VehicleQueue* queue, Vehicle vehicle) ;
 Vehicle dequeue(VehicleQueue* queue);
-void addVehicleToRandomLane(Road*  roadPassed, Vehicle vehicle);
+Lane* addVehicleToRandomLane(Road*  roadPassed, Vehicle vehicle);
+Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]);
 void printRoads(Road roads[MAX_ROADS]);
 
 
