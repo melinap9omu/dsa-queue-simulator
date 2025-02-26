@@ -25,7 +25,7 @@ typedef struct {
 
     Road* road; 
     
-    Lane* destinationLane[2];
+    Lane* destinationLane;
 
 } Vehicle;
 
@@ -81,7 +81,7 @@ void initializeQueue(VehicleQueue* queue);
 bool enqueue(VehicleQueue* queue, Vehicle vehicle) ;
 Vehicle dequeue(VehicleQueue* queue);
 Lane* addVehicleToRandomLane(Road*  roadPassed, Vehicle vehicle);
-Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]);
+Lane* generateDestination(Lane* randomSourceLane, Road roads[MAX_ROADS]);
 void printRoads(Road roads[MAX_ROADS]);
 
 

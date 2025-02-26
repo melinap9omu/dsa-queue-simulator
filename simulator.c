@@ -91,7 +91,6 @@ int main() {
     SDL_RenderPresent(renderer);
 
     // we need to create seprate long running thread for the queue processing and light
-    // pthread_create(&tLight, NULL, refreshLight, &sharedData);
     pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
     printf("upto chequeQueue is fine\n");
     pthread_create(&tReadFile, NULL, readAndParseFile, (void*) roads);
@@ -422,6 +421,11 @@ void* readAndParseFile(void* arg) {
                     vehicle.road=roadPassed;
                     printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, roadPassed->roadName);
                    Lane* lane = addVehicleToRandomLane(roadPassed, vehicle);
+
+                   Lane* destinationLane= generateDestination( lane,  roads);
+                   printf("Generated destination lane\n");
+                   vehicle.destinationLane = destinationLane;
+                   printf("Passed destinationLane to vehicle\n");
 
      
                     }

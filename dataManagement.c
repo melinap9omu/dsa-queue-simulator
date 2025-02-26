@@ -108,10 +108,10 @@ Lane* addVehicleToRandomLane(Road* roadPassed, Vehicle vehicle){
     }
 
 }
-Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]){
+Lane* generateDestination(Lane* randomSourceLane, Road roads[MAX_ROADS]){
 
     Lane* destinationLane=NULL;
-     Lane* options=NULL;
+    
     for (int j=0;j<MAX_ROADS;j++){
         if(randomSourceLane==&roads[0].lanes[3]){
             destinationLane=&roads[2].lanes[0];
@@ -119,8 +119,8 @@ Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]){
         }
         else if(randomSourceLane==&roads[0].lanes[1])
         {
-           options =[&roads[1].lanes[1],&roads[3].lanes[1]]
-         destinationLane=options(rand()%2);
+           Lane* options[]={&roads[1].lanes[1],&roads[3].lanes[1]};
+         destinationLane=options[(rand()%2)];
          return destinationLane;
         }
         else if(randomSourceLane==&roads[1].lanes[2]){
@@ -128,8 +128,8 @@ Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]){
              return destinationLane;
         } 
         else if (randomSourceLane==&roads[1].lanes[1]){
-            options=[&roads[0].lane[1],&roads[2].lanes[1]];
-            destinationLane=options(rand()%2);
+            Lane* options[]={&roads[0].lanes[1],&roads[2].lanes[1]};
+            destinationLane=options[(rand()%2)];
             return destinationLane;
 
         }
@@ -139,17 +139,17 @@ Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]){
         }
 
         else if (randomSourceLane==&roads[2].lanes[1]){
-            options=[&roads[0].lanes[1],&roads[3].lanes[1]];
-            destinationLane=options(rand()%2);
+          Lane*  options[]={&roads[0].lanes[1],&roads[3].lanes[1]};
+            destinationLane=options[(rand()%2)];
             return destinationLane;
         }
-        else if (randomSourceLane=&roads[3].lanes[2]){
+        else if (randomSourceLane==&roads[3].lanes[2]){
             destinationLane= &roads[0].lanes[0];
             return destinationLane;
         }
         else if (randomSourceLane==&roads[3].lanes[2]){
-            options=[&roads[2].lanes[1],&roads[1].lanes[1]];
-            destinationLane=options(rand()%2);
+           Lane* options[]={&roads[2].lanes[1],&roads[1].lanes[1]};
+            destinationLane=options[(rand()%2)];
             return destinationLane;
         }
         else{
