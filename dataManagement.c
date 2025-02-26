@@ -87,24 +87,29 @@ void initializeRoads(Road roads[MAX_ROADS]){
      return NULL;
  }
 
-void addVehicleToRandomLane(Road* roadPassed, Vehicle vehicle){
-       
+Lane* addVehicleToRandomLane(Road* roadPassed, Vehicle vehicle){
+     if (roadPassed == NULL) {
+    printf("Road not found.\n");
+    return NULL;
+}  
     if (roadPassed!=NULL){
         int laneIndex=rand()%MAX_LANE_SIZE;    
         printf("Attempting to add Vehicle %s to Lane %d of Road %s\n", vehicle.VechicleName, laneIndex + 1, roadPassed->roadName);
     if(enqueue(&roadPassed->lanes[laneIndex].queue,vehicle))
         {
          printf("Vehicle %s added to %s, Lane %s\n", vehicle.VechicleName, roadPassed->roadName,roadPassed->lanes[laneIndex].laneName);
+         return &roadPassed->lanes[laneIndex];
         }
         else {
 
             printf("Lane %d of %s is full. Vehicle %s could not be added.\n", laneIndex + 1, roadPassed->roadName, vehicle.VechicleName);
+            return NULL;
     }
     }
-    else {
 
-        printf("Road %s not found.\n", roadPassed->roadName);
-    }
+}
+Lane* generateDestination(){
+
 }
 
 void printRoads(Road roads[MAX_ROADS]) {
