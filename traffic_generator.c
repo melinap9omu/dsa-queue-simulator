@@ -20,10 +20,9 @@ void generateVehicleNumber(char* buffer) {
 
 // Function to generate a random lane
 char generateLane() {
-    char lanes[] = {'A', 'B', 'C', 'D'};
-    return lanes[rand() % 4];
+    char roads[] = {'A', 'B', 'C', 'D'};
+    return roads[rand() % 4];
 }
-
 int main() {
     FILE* file = fopen(FILENAME, "a");
     if (!file) {
@@ -36,15 +35,16 @@ int main() {
     while (1) {
         char vehicle[9];
         generateVehicleNumber(vehicle);
-        char lane = generateLane();
+        char road = generateLane();
 
         // Write to file
-        fprintf(file, "%s:%c\n", vehicle, lane);
+        fprintf(file, "%s:%c\n", vehicle, road);
         fflush(file); // Ensure data is written immediately
 
-        printf("Generated: %s:%c\n", vehicle, lane); // Print to console
+        printf("Generated: %s:%c\n", vehicle, road); // Print to console
 
-        sleep(1); // Wait 1 second before generating next entry
+        int delay = 1000 + (rand() % 2000); // Delay between 1-3 seconds
+        usleep(delay * 1000); 
     }
 
     fclose(file);

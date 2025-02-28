@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "dataManagement.h"
 #include "dataManagement.c"
 
 #define MAX_LINE_LENGTH 20
@@ -21,10 +22,21 @@
 #define MAX_ROADS 4
 #define MAX_VEHICLE_QUEUE_SIZE 15
 #define MAX_LANE_SIZE 3
+#define VEHICLE_WIDTH 30
+#define VEHICLE_HEIGHT 20
+#define VEHICLE_SPEED 2
 
 const char* VEHICLE_FILE = "vehicles.data";
 
-
+typedef struct {
+    Vehicle vehicle;
+    SDL_Rect rect;
+    float x, y;           // Precise position for smooth movement
+    float targetX, targetY; // Target position
+    bool isMoving;
+    bool hasArrived;
+    int pathStep;         // Current step in the path
+} VehicleUI;
 
 typedef struct{
     int currentLight;
@@ -36,12 +48,19 @@ typedef struct{
     int greenDuration;
     int redDuration;
 }TrafficLight;
+typedef struct {
+    Road* roads[MAX_ROADS];
+} ThreadData;
+
+VehicleUI activeVehicles[200];
+int vehicleCount = 0;
+
 
 // Function declarations
 
-void initializeRoads(Road roads[MAX_ROADS]);
+void initializeRoads(Road* roads[MAX_ROADS]);
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
-void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road roads[MAX_ROADS]);
+void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road* roads[MAX_ROADS]);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
 void drawLightForA(SDL_Renderer* renderer, bool isRed);
 void drawLightForB(SDL_Renderer* renderer, bool isRed);
@@ -50,25 +69,56 @@ void drawLightForD(SDL_Renderer* renderer, bool isRed);
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
 void* chequeQueue(void* arg);
 void* readAndParseFile(void* arg);
+void calculatePath(Lane* sourceLane, Lane* destLane, int pathX[4], int pathY[4], int* numPoints, Road* roads[MAX_ROADS]);
+void getLaneCoordinates(Lane* lane, int* startX, int* startY, int* endX, int* endY, Road* roads[MAX_ROADS]);
+SDL_Color getVehicleColor(const char* vehicleName);
+void addVehicleToUI(Vehicle vehicle, Road* roads[MAX_ROADS]);
+void updateVehiclesPosition(Road* roads[MAX_ROADS]);
+void renderVehicles(SDL_Renderer* renderer, TTF_Font* font);
+void processVehicleQueues(Road* roads[MAX_ROADS], bool trafficLightStatus[MAX_ROADS]);
+void updateTrafficLightStatus(bool trafficLightStatus[MAX_ROADS], SharedData* sharedData);
 
 
 
+
+
+
+
+bool fileExists(const char* path) {
+
+    struct stat buffer;
+
+    return (stat(path, &buffer) == 0); // Returns true if file exists
+
+}
 
 void printMessageHelper(const char* message, int count) {
     for (int i = 0; i < count; i++) printf("%s\n", message);
 }
 
+
 int main() {
-    pthread_t tQueue, tReadFile,tLight;
+    if (fileExists(MAIN_FONT)) {
+
+        printf("Font file exists at: %s\n", MAIN_FONT);
+
+        // Proceed to load the font
+
+    } else {
+
+        printf("Font file not found at: %s\n", MAIN_FONT);
+
+        // Handle the error (e.g., exit or use a default font)
+    }
+    
+    pthread_t tQueue, tReadFile, tLight;
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_Event event;
+    bool trafficLightStatus[MAX_ROADS] = {false, false, false, false}; 
+    Road* roads[MAX_ROADS]; // Declare the roads array
 
-    Road roads[MAX_ROADS]; // Declare the roads array
-
-    initializeRoads(roads);;
-
-
+    initializeRoads(roads);
 
     if (!initializeSDL(&window, &renderer)) {
         return -1;
@@ -77,39 +127,134 @@ int main() {
     SharedData sharedData = { 0, 0 }; // 0 => all red
 
     TTF_Font* font = TTF_OpenFont(MAIN_FONT, 24);
-    if (!font) SDL_Log("Failed to load font: %s", TTF_GetError());
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+
+        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+
+        return -1;
+
+    }
+
+
+    // Initialize SDL_ttf
+
+    if (TTF_Init() == -1) {
+
+        printf("SDL_ttf could not initialize! TTF_Error: %s\n", TTF_GetError());
+
+        SDL_Quit();
+
+        return -1;
+
+    }
+
+
+    // Load font
+
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+
+        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+
+        return -1;
+
+    }
+
+
+    // Initialize SDL_ttf
+
+    if (TTF_Init() == -1) {
+
+        printf("SDL_ttf could not initialize! TTF_Error: %s\n", TTF_GetError());
+
+        SDL_Quit();
+
+        return -1;
+
+    }
+
+
+    
+ 
 
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
-    drawRoadsAndLane(renderer, font,roads);
+    drawRoadsAndLane(renderer, font, roads);
     drawLightForA(renderer, sharedData.currentLight != 0);
     drawLightForB(renderer, sharedData.currentLight != 1);
     drawLightForC(renderer, sharedData.currentLight != 2);
     drawLightForD(renderer, sharedData.currentLight != 3);
 
-
     SDL_RenderPresent(renderer);
+    ThreadData threadData;
+for (int i = 0; i < MAX_ROADS; i++) {
+    threadData.roads[i] = roads[i];
+}
 
-    // we need to create seprate long running thread for the queue processing and light
+
+    // Create threads for queue processing and light changes
     pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
     printf("upto chequeQueue is fine\n");
-    pthread_create(&tReadFile, NULL, readAndParseFile, (void*) roads);
-    printf("upto parsefile is okay\n");
+    pthread_create(&tReadFile, NULL, readAndParseFile, (void*)&threadData);
 
+    printf("upto parsefile is okay\n");
 
     // Continue the UI thread
     bool running = true;
+    Uint32 lastTime = SDL_GetTicks();
+    
     while (running) {
-        // update light
-        // refreshLight(renderer, &sharedData);
-        while (SDL_PollEvent(&event))
+        // Process SDL events
+        while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
+        }
+        
+        // Update light status
+        refreshLight(renderer, &sharedData);
+        
+        // Frame timing for 60 fps
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - lastTime >= 16) {
+            // Update traffic light statuses
+            updateTrafficLightStatus(trafficLightStatus, &sharedData);
+            
+            // Process vehicle queues based on traffic lights
+            processVehicleQueues(roads, trafficLightStatus);
+            
+            // Update vehicle positions
+            updateVehiclesPosition(roads);
+            
+            // Clear screen and redraw everything
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_RenderClear(renderer);
+            
+            // Redraw roads, lanes, vehicles, etc.
+            drawRoadsAndLane(renderer, font, roads);
+            // Draw traffic lights
+            drawLightForA(renderer, sharedData.currentLight != 0);
+            drawLightForB(renderer, sharedData.currentLight != 1);
+            drawLightForC(renderer, sharedData.currentLight != 2);
+            drawLightForD(renderer, sharedData.currentLight != 3);
+            
+            // Draw vehicles
+            renderVehicles(renderer, font);
+            
+            // Present the rendered frame
+            SDL_RenderPresent(renderer);
+            
+            lastTime = currentTime;
+        }
     }
+    
+    // Cleanup
     SDL_DestroyMutex(mutex);
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
-    // pthread_kil
+    TTF_CloseFont(font);
+
+    TTF_Quit();
+
     SDL_Quit();
+    
     return 0;
 }
 
@@ -273,7 +418,7 @@ void refreshLight(SDL_Renderer *renderer, SharedData* sharedData){
 
 
 
-void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road roads[MAX_ROADS]) {
+void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road* roads[MAX_ROADS]) {
     SDL_SetRenderDrawColor(renderer, 211,211,211,255);
     // Vertical road
 
@@ -306,13 +451,12 @@ void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font, Road roads[MAX_ROA
         );
     }
   
-        for (int i = 0; i < MAX_ROADS/2; i++) {
-         displayText(renderer, font, roads[i].roadName, (WINDOW_WIDTH/2)-36,  (WINDOW_HEIGHT*i)-(30*i)); 
-        }
-      for (int i = 0; i < MAX_ROADS/2; i++) {
-         displayText(renderer, font, roads[2+i].roadName, (WINDOW_WIDTH*(1-i)-(96*(1-i))),  (WINDOW_HEIGHT/2) - 16); 
-       }
-
+    for (int i = 0; i < MAX_ROADS/2; i++) {
+        displayText(renderer, font, roads[i]->roadName, (WINDOW_WIDTH/2)-36, (WINDOW_HEIGHT*i)-(30*i)); 
+    }
+    for (int i = 0; i < MAX_ROADS/2; i++) {
+        displayText(renderer, font, roads[2+i]->roadName, (WINDOW_WIDTH*(1-i)-(96*(1-i))), (WINDOW_HEIGHT/2) - 16); 
+    }
 }
 
 
@@ -358,88 +502,345 @@ void* chequeQueue(void* arg){
     }
 }
 
+// Color mapping for vehicles
+SDL_Color getVehicleColor(const char* vehicleName) {
+    // Use the first character of the vehicle name to determine color
+    char firstChar = vehicleName[0];
+    
+    switch(firstChar) {
+        case 'A': return (SDL_Color){255, 0, 0, 255};    // Red
+        case 'B': return (SDL_Color){0, 0, 255, 255};    // Blue
+        case 'C': return (SDL_Color){0, 255, 0, 255};    // Green
+        case 'D': return (SDL_Color){255, 255, 0, 255};  // Yellow
+        case 'E': return (SDL_Color){255, 0, 255, 255};  // Magenta
+        default:  return (SDL_Color){100, 100, 100, 255}; // Gray
+    }
+}
+
+
+// Get lane position in screen coordinates
+void getLaneCoordinates(Lane* lane, int* startX, int* startY, int* endX, int* endY, Road* roads[MAX_ROADS]) {
+    int roadIndex = -1;
+    int laneIndex = -1;
+    
+    // Find the road and lane index
+    for (int i = 0; i < MAX_ROADS; i++) {
+        Road* currentRoad = roads[i];
+        if (lane->road == currentRoad) {
+            roadIndex = i;
+            for (int j = 0; j < MAX_LANE_SIZE; j++) {
+                if (lane == &(currentRoad->lanes[j])) {
+                    laneIndex = j;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    
+    if (roadIndex == -1 || laneIndex == -1) {
+        // Handle error: lane not found
+        *startX = *startY = *endX = *endY = 0;
+        return;
+    }
+    
+    // Window center
+    int centerX = WINDOW_WIDTH / 2;
+    int centerY = WINDOW_HEIGHT / 2;
+    int laneOffset = LANE_WIDTH * laneIndex + LANE_WIDTH / 2;
+    
+    // Calculate based on road orientation
+    switch (roadIndex) {
+        case 0: // Road A (bottom)
+            *startX = centerX - ROAD_WIDTH / 2 + laneOffset;
+            *startY = WINDOW_HEIGHT;
+            *endX = centerX - ROAD_WIDTH / 2 + laneOffset;
+            *endY = centerY + ROAD_WIDTH / 2;
+            break;
+        case 1: // Road B (top)
+            *startX = centerX + ROAD_WIDTH / 2 - laneOffset;
+            *startY = 0;
+            *endX = centerX + ROAD_WIDTH / 2 - laneOffset;
+            *endY = centerY - ROAD_WIDTH / 2;
+            break;
+        case 2: // Road C (right)
+            *startX = WINDOW_WIDTH;
+            *startY = centerY - ROAD_WIDTH / 2 + laneOffset;
+            *endX = centerX + ROAD_WIDTH / 2;
+            *endY = centerY - ROAD_WIDTH / 2 + laneOffset;
+            break;
+        case 3: // Road D (left)
+            *startX = 0;
+            *startY = centerY + ROAD_WIDTH / 2 - laneOffset;
+            *endX = centerX - ROAD_WIDTH / 2;
+            *endY = centerY + ROAD_WIDTH / 2 - laneOffset;
+            break;
+    }
+}
+
+// Calculate a path through the intersection based on source and destination lanes
+void calculatePath(Lane* sourceLane, Lane* destLane, int pathX[4], int pathY[4], int* numPoints, Road* roads[MAX_ROADS]) {
+    int sourceStartX, sourceStartY, sourceEndX, sourceEndY;
+    int destStartX, destStartY, destEndX, destEndY;
+    
+    getLaneCoordinates(sourceLane, &sourceStartX, &sourceStartY, &sourceEndX, &sourceEndY, roads);
+    getLaneCoordinates(destLane, &destStartX, &destStartY, &destEndX, &destEndY, roads);
+    
+    // First point is the entry point to the intersection
+    pathX[0] = sourceEndX;
+    pathY[0] = sourceEndY;
+    
+    // Last point is the exit point from the intersection
+    pathX[3] = destStartX;
+    pathY[3] = destStartY;
+    
+    // Calculate mid-points for a smooth curve through the intersection
+    int centerX = WINDOW_WIDTH / 2;
+    int centerY = WINDOW_HEIGHT / 2;
+    
+    // Create a curve by adding two control points
+    pathX[1] = centerX;
+    pathY[1] = sourceEndY;
+    
+    pathX[2] = destStartX;
+    pathY[2] = centerY;
+    
+    *numPoints = 4;
+}
+
+// Add a new vehicle to the UI
+void addVehicleToUI(Vehicle vehicle, Road* roads[MAX_ROADS]) {
+    if (vehicleCount >= 100) return; // Avoid overflow
+    
+    VehicleUI* vui = &activeVehicles[vehicleCount++];
+    vui->vehicle = vehicle;
+    
+    // Set initial position based on the source lane
+    int startX, startY, endX, endY;
+    getLaneCoordinates(vehicle.currentLane, &startX, &startY, &endX, &endY, roads);
+    
+    vui->x = startX;
+    vui->y = startY;
+    vui->rect.x = (int)vui->x;
+    vui->rect.y = (int)vui->y;
+    vui->rect.w = VEHICLE_WIDTH;
+    vui->rect.h = VEHICLE_HEIGHT;
+    
+    vui->isMoving = true;
+    vui->hasArrived = false;
+    vui->pathStep = 0;
+    
+    // Calculate the full path through the intersection
+    int pathX[4], pathY[4], numPoints;
+    calculatePath(vehicle.currentLane, vehicle.destinationLane, pathX, pathY, &numPoints, roads);
+    
+    // Set initial target to the entry of the intersection
+    vui->targetX = pathX[0];
+    vui->targetY = pathY[0];
+}
+
+// Move vehicles along their paths
+void updateVehiclesPosition(Road* roads[MAX_ROADS]) {
+    for (int i = 0; i < vehicleCount; i++) {
+        VehicleUI* vui = &activeVehicles[i];
+        if (!vui->isMoving || vui->hasArrived) continue;
+        
+        // Calculate direction vector
+        float dx = vui->targetX - vui->x;
+        float dy = vui->targetY - vui->y;
+        float distance = sqrt(dx*dx + dy*dy);
+        
+        if (distance < VEHICLE_SPEED) {
+            // Reached the target
+            vui->x = vui->targetX;
+            vui->y = vui->targetY;
+            vui->pathStep++;
+            
+            // Check if the vehicle has reached its final destination
+            if (vui->pathStep >= 4) {
+                vui->hasArrived = true;
+                vui->isMoving = false;
+            } else {
+                // Set the next target in the path
+                int pathX[4], pathY[4], numPoints;
+                calculatePath(vui->vehicle.currentLane, vui->vehicle.destinationLane, 
+                             pathX, pathY, &numPoints, roads);
+                             
+                vui->targetX = pathX[vui->pathStep];
+                vui->targetY = pathY[vui->pathStep];
+            }
+        } else {
+            // Move towards the target
+            float ratio = VEHICLE_SPEED / distance;
+            vui->x += dx * ratio;
+            vui->y += dy * ratio;
+        }
+        
+        // Update the rectangle position
+        vui->rect.x = (int)vui->x - VEHICLE_WIDTH / 2;
+        vui->rect.y = (int)vui->y - VEHICLE_HEIGHT / 2;
+    }
+    
+    // Clean up vehicles that have reached their destination
+    int newCount = 0;
+    for (int i = 0; i < vehicleCount; i++) {
+        if (!activeVehicles[i].hasArrived) {
+            if (i != newCount) {
+                activeVehicles[newCount] = activeVehicles[i];
+            }
+            newCount++;
+        }
+    }
+    vehicleCount = newCount;
+}
+
+// Render all vehicles
+void renderVehicles(SDL_Renderer* renderer, TTF_Font* font) {
+    for (int i = 0; i < vehicleCount; i++) {
+        VehicleUI* vui = &activeVehicles[i];
+        
+        // Get color based on vehicle name
+        SDL_Color color = getVehicleColor(vui->vehicle.VechicleName);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        
+        // Draw the vehicle rectangle
+        SDL_RenderFillRect(renderer, &vui->rect);
+        
+        // Add a border
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(renderer, &vui->rect);
+        
+        // Display vehicle name
+        SDL_Color textColor = {0, 0, 0, 255};
+        SDL_Surface* textSurface = TTF_RenderText_Solid(font, vui->vehicle.VechicleName, textColor);
+        if (textSurface) {
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            if (texture) {
+                SDL_Rect textRect = {
+                    vui->rect.x, 
+                    vui->rect.y - 20, 
+                    textSurface->w, 
+                    textSurface->h
+                };
+                SDL_RenderCopy(renderer, texture, NULL, &textRect);
+                SDL_DestroyTexture(texture);
+            }
+            SDL_FreeSurface(textSurface);
+        }
+    }
+}
+
+// Check if we need to dequeue vehicles from the lanes
+void processVehicleQueues(Road* roads[MAX_ROADS], bool trafficLightStatus[MAX_ROADS]) {
+    for (int i = 0; i < MAX_ROADS; i++) {
+        if (trafficLightStatus[i]) { // If green light
+            for (int j = 0; j < MAX_LANE_SIZE; j++) {
+                Lane* lane = &roads[i]->lanes[j];
+                if (lane->queue.count > 0) {
+                    // Check if not too many vehicles are already in the intersection
+                    if (vehicleCount < 10) {
+                        SDL_LockMutex(lane->queue.mutex);
+                        if (lane->queue.count > 0) {
+                            Vehicle vehicle = dequeue(&lane->queue);
+                            vehicle.currentLane = lane;
+                            addVehicleToUI(vehicle, roads);
+                        }
+                        SDL_UnlockMutex(lane->queue.mutex);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+void updateTrafficLightStatus(bool trafficLightStatus[MAX_ROADS], SharedData* sharedData) {
+    for (int i = 0; i < MAX_ROADS; i++) {
+        trafficLightStatus[i] = (sharedData->currentLight == i);
+    }
+}
+
 void* readAndParseFile(void* arg) {
-    Road* roads = (Road*)arg;
-    printf("inside readandParseFile\n");
+    ThreadData* data = (ThreadData*)arg;
+    Road** roads = data->roads;  
+    printf("inside readAndParseFile\n");
     struct stat file_stat;
     off_t last_size = 0;
-
+    
     while (1) {
-        if(stat(VEHICLE_FILE,&file_stat)==0 && file_stat.st_size==last_size)
-        {
+        if(stat(VEHICLE_FILE, &file_stat) == 0 && file_stat.st_size == last_size) {
             sleep(2);
             continue;
         }
+        
         last_size = file_stat.st_size;
-
         printf("checking file\n");
-        FILE* file = fopen(VEHICLE_FILE, "r+");
-        printf("file is being opened\n");
+        FILE* file = fopen(VEHICLE_FILE, "r");
         if (!file) {
             perror("Error opening file");
-             exit(1);            
+            return NULL; // Handle error
         }
+        
         printf("file is being open , starting to read\n");
         char line[MAX_LINE_LENGTH];
-        char tempBuffer[MAX_LINE_LENGTH * 100]; // Store remaining lines
+        char tempBuffer[MAX_LINE_LENGTH * 100]; // Consider dynamic allocation for large files
         tempBuffer[0] = '\0'; // Initialize buffer
         int firstLineProcessed = 0;
-        int fileisEmpty = 1;
-
-        // Read the file line by line
+        
         while (fgets(line, sizeof(line), file)) {
-           
-            // Remove newline if present
-            line[strcspn(line, "\n")] = 0;
+            line[strcspn(line, "\n")] = 0; // Remove newline
             printf("Reading files\n");
-
-            // Skip the first line after processing
+            
             if (!firstLineProcessed) {
                 firstLineProcessed = 1;
-
-                Road* roadPassed=NULL;
-
-
+                Road* roadPassed = NULL;
                 char* vehicleNumber = strtok(line, ":");
                 char* road = strtok(NULL, ":");
-
-                if (vehicleNumber && road) {
-                    printf("Road is being passed in to roadpassed\n");
-                    if (strcmp(road, "A") == 0) {
-                          roadPassed=&roads[0];
-                    } else if (strcmp(road, "B") == 0) {
-                           roadPassed=&roads[1];
-                    } else if (strcmp(road, "C") == 0) {
-                           roadPassed=&roads[2];
-                    } else if (strcmp(road, "D") == 0) {
-                           roadPassed=&roads[3];
-                    } 
-                   if (roadPassed)
-                    {
+                
+                if (vehicleNumber == NULL || road == NULL) {
+                    printf("Invalid line format: %s\n", line);
+                    continue; // Skip this line
+                }
+                
+                // Check road and assign roadPassed
+                if (strcmp(road, "A") == 0) {
+                    roadPassed = roads[0];
+                } else if (strcmp(road, "B") == 0) {
+                    roadPassed = roads[1];
+                } else if (strcmp(road, "C") == 0) {
+                    roadPassed = roads[2];
+                } else if (strcmp(road, "D") == 0) {
+                    roadPassed = roads[3];
+                }
+                
+                if (roadPassed) {
                     Vehicle vehicle;
                     strncpy(vehicle.VechicleName, vehicleNumber, sizeof(vehicle.VechicleName));
-                    vehicle.road=roadPassed;
+                    vehicle.road = roadPassed;
                     printf("Vehicle: %s, Road: %s\n", vehicle.VechicleName, roadPassed->roadName);
-                   Lane* lane = addVehicleToRandomLane(roadPassed, vehicle);
-
-                   Lane* destinationLane= generateDestination( lane,  roads);
-                   printf("Generated destination lane\n");
-                   vehicle.destinationLane = destinationLane;
-                   printf("Passed destinationLane to vehicle\n");
-
-     
+                    Lane* lane = addVehicleToRandomLane(roadPassed, vehicle);
+                    Lane* destinationLane = generateDestination(lane,  data->roads);
+                    
+                    if (destinationLane == NULL) {
+                        printf("Warning: Generated null destination lane\n");
+                        continue; // Handle appropriately
                     }
-                 else {
-                    printf("Invalid format: %s\n", line);
-                }
+                    
+                    printf("Generated destination lane\n");
+                    vehicle.destinationLane = destinationLane;
+                    printf("Passed destinationLane to vehicle\n");
+                } if (!roadPassed) {
+    printf("Warning: Invalid road in input: %s\n", road);
+    continue;
+}
             } else {
-                // Store remaining lines in the buffer
                 strcat(tempBuffer, line);
                 strcat(tempBuffer, "\n");
             }
         }
+        
         fclose(file);
-
+        
         // Overwrite the file with remaining lines
         FILE* outFile = fopen(VEHICLE_FILE, "w");
         if (!outFile) {
@@ -448,8 +849,7 @@ void* readAndParseFile(void* arg) {
             fputs(tempBuffer, outFile);
             fclose(outFile);
         }
-
+        
         sleep(2); // Manage timing
     }
-}
 }
