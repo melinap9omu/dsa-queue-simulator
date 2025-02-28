@@ -599,6 +599,53 @@ void calculatePath(Lane* sourceLane, Lane* destLane, int pathX[4], int pathY[4],
     pathY[2] = centerY;
     *numPoints = 4;
     }
+    void updateVehiclesPosition(Road* roads[MAX_ROADS]) {
+        for (int i = 0; i < vehicleCount; i++) {
+        VehicleUI* vui = &activeVehicles[i];
+        if (!vui->isMoving || vui->hasArrived) continue;
+        // Calculate direction vector
+        float dx = vui->targetX - vui->x;
+        float dy = vui->targetY - vui->y;
+        float distance = sqrt(dx*dx + dy*dy);
+        if (distance < VEHICLE_SPEED) {
+        // Reached the target
+        vui->x = vui->targetX;
+        vui->y = vui->targetY;
+        vui->pathStep++;
+        // Check if the vehicle has reached its final destination
+        if (vui->pathStep >= 4) {
+        vui->hasArrived = true;
+        vui->isMoving = false;
+        } else {
+        // Set the next target in the path
+        int pathX[4], pathY[4], numPoints;
+        calculatePath(vui->vehicle.currentLane, vui->vehicle.destinationLane, 
+        pathX, pathY, &numPoints, roads);
+        vui->targetX = pathX[vui->pathStep];
+        vui->targetY = pathY[vui->pathStep];
+        }
+        } else {
+        // Move towards the target
+        float ratio = VEHICLE_SPEED / distance;
+        vui->x += dx * ratio;
+        vui->y += dy * ratio;
+        }
+        // Update the rectangle position
+        vui->rect.x = (int)vui->x - VEHICLE_WIDTH / 2;
+        vui->rect.y = (int)vui->y - VEHICLE_HEIGHT / 2;
+        }
+        // Clean up vehicles that have reached their destination
+        int newCount = 0;
+        for (int i = 0; i < vehicleCount; i++) {
+        if (!activeVehicles[i].hasArrived) {
+        if (i != newCount) {
+        activeVehicles[newCount] = activeVehicles[i];
+        }
+        newCount++;
+        }
+        }
+        vehicleCount = newCount;
+        }  
   
  void renderVehicles(SDL_Renderer* renderer, TTF_Font* font) {
         for (int i = 0; i < vehicleCount; i++) {
