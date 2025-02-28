@@ -701,7 +701,31 @@ void addVehicleToUI(Vehicle vehicle, Road* roads[MAX_ROADS]) {
     // Set initial target to the entry of the intersection
     vui->targetX = pathX[0];
     vui->targetY = pathY[0];
-    }        
+    }  
+
+// Check if we need to dequeue vehicles from the lanes
+void processVehicleQueues(Road* roads[MAX_ROADS], bool trafficLightStatus[MAX_ROADS]) {
+    for (int i = 0; i < MAX_ROADS; i++) {
+    if (trafficLightStatus[i]) { // If green light
+    for (int j = 0; j < MAX_LANE_SIZE; j++) {
+    Lane* lane = &roads[i]->lanes[j];
+    if (lane->queue.count > 0) {
+    // Check if not too many vehicles are already in the intersection
+    if (vehicleCount < 10) {
+    SDL_LockMutex(lane->queue.mutex);
+    if (lane->queue.count > 0) {
+    Vehicle vehicle = dequeue(&lane->queue);
+    vehicle.currentLane = lane;
+    addVehicleToUI(vehicle, roads);
+    }
+    SDL_UnlockMutex(lane->queue.mutex);
+    }
+    }
+    }
+    }
+    }
+    }
+    
 void updateTrafficLightStatus(bool trafficLightStatus[MAX_ROADS], SharedData* sharedData) {
     for (int i = 0; i < MAX_ROADS; i++) {
     trafficLightStatus[i] = (sharedData->currentLight == i);
