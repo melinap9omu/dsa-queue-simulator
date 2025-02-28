@@ -677,6 +677,31 @@ void calculatePath(Lane* sourceLane, Lane* destLane, int pathX[4], int pathY[4],
         }
         }
         }
+
+// Add a new vehicle to the UI
+void addVehicleToUI(Vehicle vehicle, Road* roads[MAX_ROADS]) {
+    if (vehicleCount >= 100) return; // Avoid overflow
+    VehicleUI* vui = &activeVehicles[vehicleCount++];
+    vui->vehicle = vehicle;
+    // Set initial position based on the source lane
+    int startX, startY, endX, endY;
+    getLaneCoordinates(vehicle.currentLane, &startX, &startY, &endX, &endY, roads);
+    vui->x = startX;
+    vui->y = startY;
+    vui->rect.x = (int)vui->x;
+    vui->rect.y = (int)vui->y;
+    vui->rect.w = VEHICLE_WIDTH;
+    vui->rect.h = VEHICLE_HEIGHT;
+    vui->isMoving = true;
+    vui->hasArrived = false;
+    vui->pathStep = 0;
+    // Calculate the full path through the intersection
+    int pathX[4], pathY[4], numPoints;
+    calculatePath(vehicle.currentLane, vehicle.destinationLane, pathX, pathY, &numPoints, roads);
+    // Set initial target to the entry of the intersection
+    vui->targetX = pathX[0];
+    vui->targetY = pathY[0];
+    }        
 void updateTrafficLightStatus(bool trafficLightStatus[MAX_ROADS], SharedData* sharedData) {
     for (int i = 0; i < MAX_ROADS; i++) {
     trafficLightStatus[i] = (sharedData->currentLight == i);
