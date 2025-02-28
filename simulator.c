@@ -577,6 +577,59 @@ void getLaneCoordinates(Lane* lane, int* startX, int* startY, int* endX, int* en
             break;
     }
 }
+// Calculate a path through the intersection based on source and destination lanes
+void calculatePath(Lane* sourceLane, Lane* destLane, int pathX[4], int pathY[4], int* numPoints, Road* roads[MAX_ROADS]) {
+    int sourceStartX, sourceStartY, sourceEndX, sourceEndY;
+    int destStartX, destStartY, destEndX, destEndY;
+    getLaneCoordinates(sourceLane, &sourceStartX, &sourceStartY, &sourceEndX, &sourceEndY, roads);
+    getLaneCoordinates(destLane, &destStartX, &destStartY, &destEndX, &destEndY, roads);
+    // First point is the entry point to the intersection
+    pathX[0] = sourceEndX;
+    pathY[0] = sourceEndY;
+    // Last point is the exit point from the intersection
+    pathX[3] = destStartX;
+    pathY[3] = destStartY;
+    // Calculate mid-points for a smooth curve through the intersection
+    int centerX = WINDOW_WIDTH / 2;
+    int centerY = WINDOW_HEIGHT / 2;
+    // Create a curve by adding two control points
+    pathX[1] = centerX;
+    pathY[1] = sourceEndY;
+    pathX[2] = destStartX;
+    pathY[2] = centerY;
+    *numPoints = 4;
+    }
+  
+ void renderVehicles(SDL_Renderer* renderer, TTF_Font* font) {
+        for (int i = 0; i < vehicleCount; i++) {
+        VehicleUI* vui = &activeVehicles[i];
+        // Get color based on vehicle name
+        SDL_Color color = getVehicleColor(vui->vehicle.VechicleName);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        // Draw the vehicle rectangle
+        SDL_RenderFillRect(renderer, &vui->rect);
+        // Add a border
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(renderer, &vui->rect);
+        // Display vehicle name
+        SDL_Color textColor = {0, 0, 0, 255};
+        SDL_Surface* textSurface = TTF_RenderText_Solid(font, vui->vehicle.VechicleName, textColor);
+        if (textSurface) {
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        if (texture) {
+        SDL_Rect textRect = {
+        vui->rect.x, 
+        vui->rect.y - 20, 
+        textSurface->w, 
+        textSurface->h
+        };
+        SDL_RenderCopy(renderer, texture, NULL, &textRect);
+        SDL_DestroyTexture(texture);
+        }
+        SDL_FreeSurface(textSurface);
+        }
+        }
+        }
 void updateTrafficLightStatus(bool trafficLightStatus[MAX_ROADS], SharedData* sharedData) {
     for (int i = 0; i < MAX_ROADS; i++) {
     trafficLightStatus[i] = (sharedData->currentLight == i);
