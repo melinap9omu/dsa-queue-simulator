@@ -102,4 +102,5 @@ To extend this project, you might consider:
 - **Vehicle File Access:** Check that the program has read/write permissions for the vehicles.data file
 - **SDL Initialization Errors:** Make sure SDL2 and SDL2_ttf libraries are correctly installed
 
-![Traffic Simulation](untitled_design.gif)
+
+![Demo GIF](https://github.com/melinap9omu/dsa-queue-simulator/blob/main/Untitled%20design.gif)
