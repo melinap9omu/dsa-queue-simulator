@@ -40,6 +40,8 @@ struct Lane {
     int VehiclesNo;
     VehicleQueue queue;
     Road* road;
+ 
+
 };
 
 // Road struct
@@ -54,7 +56,7 @@ Road* findRoad(Road* roads[MAX_ROADS], const char* roadName);
 void initializeQueue(VehicleQueue* queue);
 bool enqueue(VehicleQueue* queue, Vehicle vehicle);
 Vehicle dequeue(VehicleQueue* queue);
-Lane* addVehicleToRandomLane(Road* roadPassed, Vehicle vehicle);
+void addVehicleToRandomLaneWithDestinationLane(Road* roads[MAX_ROADS],Road* roadPassed, Vehicle vehicle);
 Lane* generateDestination(Lane* randomSourceLane, Road* roads[MAX_ROADS]);
 void printRoads(Road* roads[MAX_ROADS]);
 

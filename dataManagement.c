@@ -15,16 +15,26 @@ void initializeQueue(VehicleQueue* queue) {
 }
 
 bool enqueue(VehicleQueue* queue, Vehicle vehicle) {
+    if(queue==NULL){
+        printf("Error:Queue is  not initialized in lane\n");
+        return false;
+    }
+    if(queue->mutex==NULL){
+        printf("Error: Mutex is not initialized for queue\n");
+        return false;
+    }
     SDL_LockMutex(queue->mutex);
 
     if (queue->count < QUEUE_SIZE) {
         queue->vehicles[queue->rear] = vehicle; // Add vehicle to the queue
         queue->rear = (queue->rear + 1) % QUEUE_SIZE; // Move rear index forward
-        queue->count++; // Increment vehicle count
+        queue->count++; 
+        printf("Vehicle hase been successfully added:\n");// Increment vehicle count
         SDL_CondSignal(queue->cond); // Signal that a vehicle has been added
         SDL_UnlockMutex(queue->mutex);
         return true; // Successfully added
     }
+    
 
     SDL_UnlockMutex(queue->mutex);
     return false; // Queue is full
@@ -78,24 +88,27 @@ Road* findRoad(Road* roads[MAX_ROADS], const char* roadName) {
     return NULL;
 }
 
-Lane* addVehicleToRandomLane(Road* roadPassed, Vehicle vehicle) {
+void addVehicleToRandomLaneWithDestinationLane(Road* roads[MAX_ROADS],Road* roadPassed, Vehicle vehicle) {
     if (roadPassed == NULL) {
         printf("Road not found.\n");
-        return NULL;
+        return ;
     }  
     
-    int laneIndex = rand() % MAX_LANE_SIZE;    
+    int laneIndex = rand() % MAX_LANE_SIZE;   
+    Lane* selectedLane=&(roadPassed->lanes[laneIndex]);
+
     printf("Attempting to add Vehicle %s to Lane %d of Road %s\n", 
            vehicle.VechicleName, laneIndex + 1, roadPassed->roadName);
+    Lane* destinationLane = generateDestination(selectedLane, roads);
+
+    printf("Generated destination Lane %s\n",destinationLane->laneName);
+    if(destinationLane!=NULL){
+        vehicle.destinationLane=destinationLane;
+    }
     
-    if (enqueue(&roadPassed->lanes[laneIndex].queue, vehicle)) {
-        printf("Vehicle %s added to %s, Lane %s\n", 
-               vehicle.VechicleName, roadPassed->roadName, roadPassed->lanes[laneIndex].laneName);
-        return &roadPassed->lanes[laneIndex];
-    } else {
-        printf("Lane %d of %s is full. Vehicle %s could not be added.\n", 
-               laneIndex + 1, roadPassed->roadName, vehicle.VechicleName);
-        return NULL;
+    if (enqueue(&selectedLane->queue, vehicle)) {
+        printf("enqueuing vehicle after updating destinationLane.\n");
+        
     }
 }
 
